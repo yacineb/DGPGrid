@@ -1,0 +1,6 @@
+D:\Dropbox\Institute\Diploma\DGPGrid\DGPGrid\bin\Debug\DGPGrid.exe
+D:\Dropbox\Institute\Diploma\DGPGrid\DGPGrid\bin\Debug\DGPGrid.pdb
+D:\Dropbox\Institute\Diploma\DGPGrid\DGPGrid\obj\x86\Debug\DGPGrid.csprojResolveAssemblyReference.cache
+D:\Dropbox\Institute\Diploma\DGPGrid\DGPGrid\obj\x86\Debug\DGPGrid.exe
+D:\Dropbox\Institute\Diploma\DGPGrid\DGPGrid\obj\x86\Debug\DGPGrid.pdb
+D:\Dropbox\Institute\Diploma\DGPGrid\DGPGrid\bin\Debug\DGPGrid.exe.config
