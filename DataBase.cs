@@ -16,6 +16,7 @@ namespace DGPGrid
 		public String name;
 		public String exec;
 		public String workDir;
+		public String master;
 		public List<String> data = new List<String>();
 		public List<String> result = new List<String>();
 		public List<String> subscribed = new List<String>();
@@ -25,7 +26,7 @@ namespace DGPGrid
 		{
 		}
 		
-		public TaskEntry(String inid, String inname, String inexec, String inworkDir, List<String> indata, List<String> inresult, List<String> insubscribed, List<String> inunsubscribed)
+		public TaskEntry(String inid, String inname, String inexec, String inworkDir, List<String> indata, List<String> inresult, List<String> insubscribed, List<String> inunsubscribed, string inmaster)
 		{
 			id = inid;
 			name = inname;
@@ -35,6 +36,7 @@ namespace DGPGrid
 			result = inresult;
 			subscribed = insubscribed;
 			unsubscribed = inunsubscribed;
+			master = inmaster;
 		}
 	}
 	public class PeerEntry
@@ -97,7 +99,7 @@ namespace DGPGrid
         {
         	foreach(TaskEntry job in injobs)
         	{
-        		TaskManager.addTask(job.id, job.name, job.exec, job.workDir, job.data, job.result, job.subscribed, job.unsubscribed);
+        		TaskManager.addTask(job.id, job.name, job.exec, job.workDir, job.data, job.result, job.subscribed, job.unsubscribed, job.master);
         	}
         }
         

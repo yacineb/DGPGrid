@@ -28,6 +28,7 @@ namespace DGPGrid
 		{
 			TaskEntry job = new TaskEntry();
 			job.id = id;
+			job.master = Settings.myID;
 			job.name = name;
 			job.workDir = Settings.workingDirectory + id + "\\";
 			if (File.Exists(job.workDir+"task.exe"))
@@ -46,6 +47,7 @@ namespace DGPGrid
 			TaskEntry job = new TaskEntry();
 			job.id = id;
 			job.name = name;
+			job.master = Settings.myID;
 			job.workDir = workingDir;
 			String[] names = exec.Split('\\');
 			System.Diagnostics.Debug.WriteLine(workingDir+names[names.Length - 1]);
@@ -63,7 +65,7 @@ namespace DGPGrid
 			DataBase.jobs.Add(job);
 		}
 		
-		public static void addTask(String iden, String name, String exec, String workDir, List<String> data, List<String> inresult, List<String> insubscribed, List<String> inunsubscribed )
+		public static void addTask(String iden, String name, String exec, String workDir, List<String> data, List<String> inresult, List<String> insubscribed, List<String> inunsubscribed, string inmaster )
 		{
 			
         	TaskEntry res = DataBase.jobs.Find(
@@ -74,7 +76,7 @@ namespace DGPGrid
         	);
             if (res == null)
             {
-            	DataBase.jobs.Add(new TaskEntry(iden, name, exec, Settings.workingDirectory + iden, data, inresult, insubscribed, inunsubscribed));
+            	DataBase.jobs.Add(new TaskEntry(iden, name, exec, Settings.workingDirectory + iden, data, inresult, insubscribed, inunsubscribed, inmaster));
     			DataBase.setTasksChanged();
         	}
             else
@@ -105,38 +107,61 @@ namespace DGPGrid
 		{
 			foreach(TaskEntry job in DataBase.jobs)
 			{
-				Console.WriteLine("ID: {0}; Name: {1}; Exec: {2}; Subscribed: {3}; Results/Data: {4}/{5}",
-				                  job.id, job.name, job.exec, job.subscribed.Count(), job.result.Count(), job.data.Count());
+				Console.WriteLine("ID: {0}; Name: {1}; Master: {2}; Subscribed: {3}; Results/Data: {4}/{5}",
+				                  job.id, job.name, job.master, job.subscribed.Count(), job.result.Count(), job.data.Count());
 						
 			}
 		}
 		
 		public static void Subscribe(string iden)
 		{
-			if(DataBase.jobs.FindIndex(f => f.id == iden) >= 0)
+        	TaskEntry job = DataBase.jobs.Find(
+        		delegate(TaskEntry peer)
+        		{
+        			return peer.id == iden;
+        		}
+        	);
+            if (job != null)
+            {
 				queue.Add(iden);
-			   
-				
+				job.subscribed.Add(Settings.myID);
+        	}				
 		}
+		
 		public static void StartWorker()
 		{
 			Task.Factory.StartNew(() => 
 				{
 			        int queueLen = 0;
 			        int pool = 10;
-			        int reps;
+			        int start = 0, time = 0;
+			        int reps, index;
+			        bool found = false, started = false;
+			        string tempid = "";
+			        List<string> tempdata = new List<string>();
+        			Dictionary<string, string> dataTemp = new Dictionary<string, string>();
 			    	string filename, result;
 			    	string[] ress;
         			Random r_num = new Random(); 
-								System.Diagnostics.Debug.WriteLine("Worker started");
                   	while (true)
                   	{
-    					Thread.Sleep(1000);
                   		reps = 0;
                   		if(queue.Count() == 0)
                   		{
-							System.Diagnostics.Debug.WriteLine("Nothing to compute");
+    						Thread.Sleep(1000);
+    						if(started)
+    						{
+    							Console.WriteLine("Finished in {0} seconds", time.ToString());
+    							started = false;
+    						}
+    						else
+    							start = timestamp();
                   			continue;
+                  		}
+                  		else
+                  		{
+                  			time = timestamp() - start;
+                  			started = true;
                   		}
                   		
 			        	TaskEntry job = DataBase.jobs.Find(
@@ -147,44 +172,45 @@ namespace DGPGrid
 			        	);
 			            if (job == null)
 			            {
-								System.Diagnostics.Debug.WriteLine("Task not Found");
-			            	queue.Remove(queue[0]);
+							System.Diagnostics.Debug.WriteLine("Task not Found");
+							queue.RemoveAt(0);
 			            	continue;
 			        	}
-                  		while(pool > queueLen)
+			            if(String.Compare(job.id, tempid) != 0)
+			            {
+			            	tempid = job.id;
+			            	tempdata.Clear();
+			            	tempdata = job.data.OfType<string>().ToList();
+			            }
+			            while(pool > queueLen && tempdata.Count() > 0)
                   		{
-								System.Diagnostics.Debug.WriteLine("trying to find work");
 							do
 							{
-								filename = job.data[r_num.Next(0,job.data.Count())];
+								index = r_num.Next(0,tempdata.Count());
+								filename = tempdata[index];
 								ress = filename.Split('\\');
 								result = "result\\" + ress[ress.Length - 1];
 								if(!File.Exists(Settings.workingDirectory + job.id + "\\" + filename))
 									continue;
-								System.Diagnostics.Debug.WriteLine("trying to find data set");
 					 			reps++;
-				 				if(reps > 5)
-				 				{
-				 					break;
-				 				}
+					 			found = job.result.Contains(result) || dataTrans.ContainsKey("data\\"+ress[ress.Length - 1]);
+					 			if(found)
+					 				tempdata.RemoveAt(index);
 							}       	
-							while(job.result.Contains(result) || dataTrans.ContainsKey("data\\"+ress[ress.Length - 1]));
-			 				if(reps > 5)
-			 				{
-			 					reps = 0;
-			 					break;
-			 				}
-							dataTrans.Add("data\\"+ress[ress.Length - 1], Settings.myID);
-							queueLen++;
+							while((reps < tempdata.Count() && found) || (tempdata.Count() > 0 && found));
+							if(!found)
+							{
+								dataTrans.Add("data\\"+ress[ress.Length - 1], Settings.myID);
+				 				tempdata.RemoveAt(index);
+								queueLen++;
+							}
                   		}
-								System.Diagnostics.Debug.WriteLine("before starting worker");
 			        	System.Diagnostics.Process p = new System.Diagnostics.Process();
+	 					reps = 0;
 			        	foreach(KeyValuePair<string, string> KV in dataTrans)
 			        	{
-								System.Diagnostics.Debug.WriteLine("Never found work");
 			        		if(KV.Value != Settings.myID)
 			        			continue;
-							System.Diagnostics.Debug.WriteLine("No I did it");
 							ress = KV.Key.Split('\\');
 							filename = Settings.workingDirectory + job.id + "\\data\\" + ress[ress.Length - 1];
 							result = Settings.workingDirectory + job.id + "\\result\\" + ress[ress.Length - 1];
@@ -194,44 +220,32 @@ namespace DGPGrid
 							p.StartInfo.FileName = Settings.workingDirectory + job.id + "\\" + job.exec;
 							p.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
 							p.Start();
-							System.Diagnostics.Debug.WriteLine("started");
 				 			p.WaitForExit();
 				 			if(p.ExitCode == 0)
 				 			{
 				 				job.result.Add("result\\" + ress[ress.Length - 1]);
+								dataTemp.Add(KV.Key, KV.Value);
 				 				queueLen--;
 				 			}
 				 			reps++;
-			 				if(reps > 5)
-			 				{
-			 					reps = 0;
-			 					break;
-			 				}
+				 				if(reps > 5)
+				 			{
+				 				break;
+				 			}
+			        	}
+			        	foreach(KeyValuePair<string, string> KV in dataTemp)
+			        	{
+			        		dataTrans.Remove(KV.Key);
+			        	}
+			        	dataTemp.Clear();
+			        	if(job.result.Count() == job.data.Count())
+			        	{
+							System.Diagnostics.Debug.WriteLine("Task finished");
+							queue.RemoveAt(0);
 			        	}
                   	}
                 }
             );
-			/*
-        	Random r_num = new Random(); 
-        	String filename, result;
-        	String[] ress;
-        	
-			do
-			{
-				filename = queue[0].data[r_num.Next(0,queue[0].data.Count())];
-				ress = filename.Split('\\');
-				result = queue[0].workDir + "result\\" + ress[ress.Length - 1];
-			}       	
-			while(queue[0].result.Contains(result));        	
-        	
-        	System.Diagnostics.Process p = new System.Diagnostics.Process();
-			p.StartInfo.Arguments = filename + " " + result;
-			p.StartInfo.FileName = queue[0].exec;
-			p.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-			p.Start();
- 			p.WaitForExit();
- 			if(p.ExitCode == 0)
- 				queue[0].result.Add(result);*/
 		}
 	}
 }

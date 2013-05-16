@@ -297,6 +297,7 @@ namespace DGPGrid
     	public Socket handle;
     	public StateObject state;
     	public MessageProcessor mp = null;
+    	public Dictionary<string, int> routes = new Dictionary<string, int>;
     	
         private System.Threading.Semaphore m_semaphore = new System.Threading.Semaphore(1, 1);
     	
