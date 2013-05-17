@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -66,6 +68,12 @@ namespace DGPGrid
 					mes += param[i];
 				Connection con = DataBase.getConn(param[1]);
             	con.Send(System.Text.Encoding.Unicode.GetBytes(mes));
+			}
+			
+			if(String.Equals(command, "data"))
+			{
+				foreach(KeyValuePair<string, string> KV in DataBase.dataTrans)
+					Console.WriteLine("{0} = {1}", KV.Key, KV.Value);
 			}
 			
 			// Show

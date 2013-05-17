@@ -21,6 +21,8 @@ namespace DGPGrid
 		public List<String> result = new List<String>();
 		public List<String> subscribed = new List<String>();
 		public List<String> unsubscribed = new List<String>();
+		public List<Route> routes = new List<Route>();
+		
 		
 		public TaskEntry()
 		{
@@ -37,6 +39,22 @@ namespace DGPGrid
 			subscribed = insubscribed;
 			unsubscribed = inunsubscribed;
 			master = inmaster;
+		}
+	}
+	public class Route
+	{
+		public int metric;
+		public List<string> cons = new List<string>();
+		
+		public Route()
+		{
+		}
+		
+		public Route(int inMetric, string[] inIDs)
+		{
+			metric = inMetric;
+			foreach(string id in inIDs)
+				cons.Add(id);
 		}
 	}
 	public class PeerEntry
@@ -61,9 +79,12 @@ namespace DGPGrid
         public static Dictionary<String, Connection> conBase = new Dictionary<String, Connection>();
         // <IP:port, ID>
         //public static Dictionary<String, String> peerBase = new Dictionary<String, String>();
+        public static  int poolLen = 10;
         
 		public static List<TaskEntry> jobs = new List<TaskEntry>();
 		public static List<PeerEntry> peers = new List<PeerEntry>();
+		// <DataFile, PeerID>
+        public static Dictionary<string, string> dataTrans = new Dictionary<string, string>();
         
         #region Connections
         public static void AddConn(String Address, Connection conn)
@@ -103,6 +124,57 @@ namespace DGPGrid
         	}
         }
         
+        public static void MergeRoutes(string inRoutes, string inCon)
+        {
+        	string[] routes = inRoutes.Split('|');
+        	int metric = 0;
+        	for(int i = 0; i < routes.Length/2; i += 2)
+        	{
+				try
+				{
+					metric = Int32.Parse(routes[i]) + 1;
+				}
+				catch (Exception e)
+				{
+					System.Diagnostics.Debug.WriteLine(e.ToString());
+				}
+        		if(metric == 0)
+        			continue;
+	        	TaskEntry job = DataBase.jobs.Find(
+	        		delegate(TaskEntry peer)
+	        		{
+	        			return peer.id == routes[i + 1];
+	        		}
+	        	);
+        		
+        		foreach(Route KV in job.routes)
+        		{
+        			if(KV.cons.Contains(inCon))
+        			{
+        				KV.cons.Remove(inCon);
+        			} 			  
+        		}
+        		
+	        	Route res = job.routes.Find(
+	        		delegate(Route peer)
+	        		{
+	        			return peer.metric == metric;
+	        		}
+	        	);
+	            if (res == null)
+	            {
+	            	string[] inIDs = new string[1]{inCon};
+	            	Route r = new Route(metric, inIDs);
+	            	job.routes.Add(r);
+        			setRoutesChanged();
+	        	}
+	            else
+	            {
+	            	res.cons.Add(inCon);
+	            }
+            
+        	}
+        }
         
         public static void DelConn(String Address)
         {
@@ -113,7 +185,7 @@ namespace DGPGrid
         {
 			foreach (KeyValuePair<String, Connection> pair in conBase)
 			{
-			    Console.WriteLine("{0}", pair.Key);
+			    Console.WriteLine("ID: {0}; IP: {1}", pair.Value.ID, pair.Key);
        		}
     	}
                 
@@ -162,6 +234,15 @@ namespace DGPGrid
 			{
 			    con = pair.Value;
 			    con.setTaskChanged();
+       		}
+        }
+        public static void setRoutesChanged()
+        {
+        	Connection con = null;
+			foreach (KeyValuePair<String, Connection> pair in conBase)
+			{
+			    con = pair.Value;
+			    con.setRouteChanged();
        		}
         }
         public static void Save()
