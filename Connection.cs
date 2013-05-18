@@ -25,29 +25,14 @@ namespace DGPGrid
 	}
     
     public class MessageProcessor
-    {
-        private enum ConnectionState
-        {
-            Idle = 0,
-            Receiving,
-            ReceivingPeers,
-            ReceivingRoute,
-            ReceivingTasks,
-            ReceivingExec,
-            ReceivingData,
-            ReceivingRes,
-            Sending,
-            Ping
-        };
-        
+    {        
     	public Connection con = null;
-        private volatile ConnectionState state;
         public bool peerChanged = true;
         public bool taskChanged = true;
         public bool routeChanged = true;
         public int dataSent = 0;
         public int dataReceived = 0;
-        public int dataWindow = 5000;
+        public int dataWindow = 10;
         
         
 		#region Commands
@@ -62,6 +47,8 @@ namespace DGPGrid
 		byte[] cSendData = { 8 };
 		byte[] cSendRoute = { 9 };
 		byte[] cAskExec = { 10 };
+		byte[] cAskData = { 11 };
+		byte[] cAskRes = { 12 };
 		#endregion
 		byte[] ReceivedData = null;
 		int index = 0;
@@ -75,22 +62,26 @@ namespace DGPGrid
 			
     	public MessageProcessor(Connection connect)
     	{
-    		state = ConnectionState.Idle;
+    				Console.WriteLine("Ping have not been answered");
+    		con.status = Connection.ConnectionStatus.Idle;
+    				Console.WriteLine("Ping have not been answered");
     		con = connect;
+    				Console.WriteLine("Ping have not been answered");
     		SendID();
+    				Console.WriteLine("Ping have not been answered");
     	}
     	
     	public void Parse(byte[] input, int size)
     	{
     		//Console.WriteLine(BitConverter.ToString(input, 0, size).Replace("-","") + " Size: " + size.ToString());
     		
-			if (input[0] == cReceived[0] && state == ConnectionState.Sending)
+			if (input[0] == cReceived[0] && con.status == Connection.ConnectionStatus.Sending)
 			{
-				state = ConnectionState.Idle;
+				con.status = Connection.ConnectionStatus.Idle;
 			}    		
 			
     		#region ReceiveID
-			if (input[0] == cSendId[0] && state == ConnectionState.Idle)
+			if (input[0] == cSendId[0] && con.status == Connection.ConnectionStatus.Idle)
 			{
 				int length = BitConverter.ToInt32(input, 1);
 				con.ID = Encoding.ASCII.GetString(input, sizeof(Int32)+1, length);
@@ -98,7 +89,7 @@ namespace DGPGrid
     		#endregion
     		
     		#region ReceiveRoutes
-			if (input[0] == cSendRoute[0] && state == ConnectionState.Idle)
+			if (input[0] == cSendRoute[0] && con.status == Connection.ConnectionStatus.Idle)
 			{
 				int length = BitConverter.ToInt32(input, 1);
 				ReceivedData = new byte[length];
@@ -110,7 +101,7 @@ namespace DGPGrid
 					toGet = len - size + sizeof(Int32) + 1;
 					Array.Copy(input, sizeof(Int32)+1, ReceivedData, 0, size-1-sizeof(Int32));
 					index = size-1-sizeof(Int32);
-					state = ConnectionState.ReceivingRoute;
+					con.status = Connection.ConnectionStatus.ReceivingRoute;
 					
 					return;
 				}
@@ -123,7 +114,7 @@ namespace DGPGrid
 				con.Send(cReceived);
 			}
 			
-			if(state == ConnectionState.ReceivingRoute)
+			if(con.status == Connection.ConnectionStatus.ReceivingRoute)
 			{
 				if(size<toGet)
 				{
@@ -144,14 +135,14 @@ namespace DGPGrid
 					
 					DataBase.MergeRoutes(Routes, con.ID);
 					con.Send(cReceived);
-					state = ConnectionState.Idle;
+					con.status = Connection.ConnectionStatus.Idle;
 				}
 				
 			}
     		#endregion
     		
     		#region ReceivePeer
-			if (input[0] == cSendPeer[0] && state == ConnectionState.Idle)
+			if (input[0] == cSendPeer[0] && con.status == Connection.ConnectionStatus.Idle)
 			{
 				int length = BitConverter.ToInt32(input, 1);
 				ReceivedData = new byte[length];
@@ -163,7 +154,7 @@ namespace DGPGrid
 					toGet = len - size + sizeof(Int32) + 1;
 					Array.Copy(input, sizeof(Int32)+1, ReceivedData, 0, size-1-sizeof(Int32));
 					index = size-1-sizeof(Int32);
-					state = ConnectionState.ReceivingPeers;
+					con.status = Connection.ConnectionStatus.ReceivingPeers;
 					
 					return;
 				}
@@ -181,7 +172,7 @@ namespace DGPGrid
 				con.Send(cReceived);
 			}
 			
-			if(state == ConnectionState.ReceivingPeers)
+			if(con.status == Connection.ConnectionStatus.ReceivingPeers)
 			{
 				if(size<toGet)
 				{
@@ -205,14 +196,14 @@ namespace DGPGrid
 					List<PeerEntry> inpeers = (List<PeerEntry>)s.Deserialize(memStream);
 					DataBase.MergePeers(inpeers);
 					con.Send(cReceived);
-					state = ConnectionState.Idle;
+					con.status = Connection.ConnectionStatus.Idle;
 				}
 				
 			}
     		#endregion
     		
     		#region ReceiveTask
-			if (input[0] == cSendTask[0] && state == ConnectionState.Idle)
+			if (input[0] == cSendTask[0] && con.status == Connection.ConnectionStatus.Idle)
 			{
 				int length = BitConverter.ToInt32(input, 1);
 				ReceivedData = new byte[length];
@@ -224,7 +215,7 @@ namespace DGPGrid
 					toGet = len - size + sizeof(Int32) + 1;
 					Array.Copy(input, sizeof(Int32)+1, ReceivedData, 0, size-1-sizeof(Int32));
 					index = size-1-sizeof(Int32);
-					state = ConnectionState.ReceivingTasks;
+					con.status = Connection.ConnectionStatus.ReceivingTasks;
 					
 					return;
 				}
@@ -242,7 +233,7 @@ namespace DGPGrid
 				con.Send(cReceived);
 			}
 			
-			if(state == ConnectionState.ReceivingTasks)
+			if(con.status == Connection.ConnectionStatus.ReceivingTasks)
 			{
 				if(size<toGet)
 				{
@@ -266,14 +257,14 @@ namespace DGPGrid
 					List<TaskEntry> injobs = (List<TaskEntry>)s.Deserialize(memStream);
 					DataBase.MergeTasks(injobs);
 					con.Send(cReceived);
-					state = ConnectionState.Idle;
+					con.status = Connection.ConnectionStatus.Idle;
 				}
 				
 			}
     		#endregion
     		
     		#region ReceiveExec
-			if (input[0] == cSendExec[0] && state == ConnectionState.Idle)
+			if (input[0] == cSendExec[0] && con.status == Connection.ConnectionStatus.Idle)
 			{
 				if(File.Exists(Settings.workingDirectory + askedFor + "\\task.exe"))
 				{
@@ -290,7 +281,7 @@ namespace DGPGrid
 					toGet = len - size + sizeof(Int32) + 1;
 					Array.Copy(input, sizeof(Int32)+1, ReceivedData, 0, size-1-sizeof(Int32));
 					index = size-1-sizeof(Int32);
-					state = ConnectionState.ReceivingExec;
+					con.status = Connection.ConnectionStatus.ReceivingExec;
 					
 					return;
 				}
@@ -307,7 +298,7 @@ namespace DGPGrid
 				askedFor = "";
 			}
 			
-			if(state == ConnectionState.ReceivingExec)
+			if(con.status == Connection.ConnectionStatus.ReceivingExec)
 			{
 				if(File.Exists(Settings.workingDirectory + askedFor + "\\task.exe"))
 				{
@@ -336,7 +327,7 @@ namespace DGPGrid
 	       	 		exec.Write(ReceivedData, 0, len);
 					
 					con.Send(cReceived);
-					state = ConnectionState.Idle;
+					con.status = Connection.ConnectionStatus.Idle;
 					askedFor = "";
 				}
 				
@@ -344,8 +335,9 @@ namespace DGPGrid
     		#endregion
     		    		
     		#region ReceiveData
-			if (input[0] == cSendData[0] && state == ConnectionState.Idle)
+			if (input[0] == cSendData[0] && con.status == Connection.ConnectionStatus.Idle)
 			{
+					con.status = Connection.ConnectionStatus.ReceivingData;
 				int inIndex = 1;
 				minPackSize = 1 + sizeof(int);
 					
@@ -369,7 +361,6 @@ namespace DGPGrid
 					return;
 				if(size<length)
 				{
-					state = ConnectionState.ReceivingData;
 				//	file = File.OpenWrite(Settings.workingDirectory + jobID + "\\" + dataPath);
 					len = length;
 					toGet = len - size + inIndex;
@@ -397,11 +388,151 @@ namespace DGPGrid
 				file.Close();
 				
 				con.Send(cReceived);
-					state = ConnectionState.Idle;
+					con.status = Connection.ConnectionStatus.Idle;
+			}
+    		#endregion
+    		
+    		#region ReceiveRes
+			if (input[0] == cSendRes[0] && con.status == Connection.ConnectionStatus.Idle)
+			{
+				con.status = Connection.ConnectionStatus.ReceivingRes;
+				int inIndex = 1;
+				minPackSize = 1 + sizeof(int);
+					
+				int jobIDLen = BitConverter.ToInt32(input, inIndex);
+								
+				jobID = Encoding.ASCII.GetString(input, sizeof(Int32)+1, jobIDLen);
+				inIndex += sizeof(Int32) + jobIDLen;
+				int dataPathLen = BitConverter.ToInt32(input, inIndex);
+				//Console.WriteLine("Packet size {0}, job Length {1}, Path Len {2}", size.ToString(), jobIDLen.ToString(), dataPathLen.ToString());
+				dataPath = Encoding.ASCII.GetString(input, sizeof(Int32)+inIndex, dataPathLen);
+				inIndex += sizeof(Int32) + dataPathLen;
+        	
+				int length = BitConverter.ToInt32(input, inIndex);
+				inIndex += sizeof(Int32);
+				ReceivedData = new byte[length];
+				
+				//Console.WriteLine("Getting {0} from job {1}", dataPath, jobID);
+				
+				
+				if(length<1)
+					return;
+				if(size<length)
+				{
+				//	file = File.OpenWrite(Settings.workingDirectory + jobID + "\\" + dataPath);
+					len = length;
+					toGet = len - size + inIndex;
+					Array.Copy(input, inIndex, ReceivedData, 0, size-inIndex);
+       	 			//file.Write(input, inIndex, size-inIndex);
+					index = size-inIndex;
+					
+					return;
+				}
+				Array.Copy(input, inIndex, ReceivedData, 0, length);
+				
+				
+					lock(DataBase.dataTrans)
+					{
+						System.Diagnostics.Debug.WriteLine("Removed", dataPath);
+						DataBase.dataTrans.Remove(dataPath);
+					}
+				
+				if(!Directory.Exists(Settings.workingDirectory + jobID + "\\result"))
+					Directory.CreateDirectory(Settings.workingDirectory + jobID + "\\result");
+				
+				
+					string[] ress = dataPath.Split('\\');
+					string conID;
+					
+					lock(DataBase.dataTrans)
+					{
+						conID = DataBase.dataTrans["data\\" + ress[ress.Length - 1]];
+						DataBase.dataTrans.Remove("data\\" + ress[ress.Length - 1]);
+					}
+					
+					
+			    	Connection res = DataBase.cons.Find(
+			    		delegate(Connection connect)
+			    		{
+			    			return connect.ID == conID;
+			    		}
+			    	);
+					
+					if(res != null)
+						res.mp.dataReceived++;
+				
+				
+       	 		file.Write(ReceivedData, 0, length);
+       	 		//file.Write(input, inIndex, length);
+				file.Close();
+				
+				con.Send(cReceived);
+					con.status = Connection.ConnectionStatus.Idle;
+			}
+    		#endregion
+    		
+    		#region AskedForExec
+			if (input[0] == cAskExec[0]  && con.status == Connection.ConnectionStatus.Idle)
+			{
+				int length = BitConverter.ToInt32(input, 1);
+				
+				if(size < (length + 1 + sizeof(int)))
+					return;
+				
+				try{
+					string jobID = Encoding.ASCII.GetString(input, sizeof(Int32)+1, length);
+					SendExec(jobID);
+				}
+				catch(Exception e)
+				{
+					System.Diagnostics.Debug.WriteLine(e.ToString());
+				}
+			}
+    		#endregion
+    		
+    		#region AskedForRes
+			if (input[0] == cAskRes[0]  && con.status == Connection.ConnectionStatus.Idle)
+			{
+				int inIndex = 1;
+					
+				int jobIDLen = BitConverter.ToInt32(input, inIndex);
+				jobID = Encoding.ASCII.GetString(input, sizeof(Int32)+inIndex, jobIDLen);
+				inIndex += sizeof(Int32) + jobIDLen;
+				
+				int dataPathLen = BitConverter.ToInt32(input, inIndex);
+				dataPath = Encoding.ASCII.GetString(input, sizeof(Int32)+inIndex, dataPathLen);
+				
+				if(!File.Exists(Settings.workingDirectory + jobID + "\\" + dataPath))
+					return;
+				
+				try{
+					SendRes(jobID, dataPath);
+				}
+				catch(Exception e)
+				{
+					System.Diagnostics.Debug.WriteLine(e.ToString());
+				}
+			}
+    		#endregion
+    		
+			if (input[0] == cPing[0]  && con.status == Connection.ConnectionStatus.Idle)
+			{
+				Console.WriteLine("Ping");
+				con.Send(cReceived);
 			}
 			
-			if(state == ConnectionState.ReceivingData)
+			if(con.status == Connection.ConnectionStatus.Ping)
 			{
+				if (input[0] == cReceived[0])
+				{
+					Console.WriteLine("Pong");
+					con.status = Connection.ConnectionStatus.Idle;
+				}
+			}
+    	}
+    	
+    	public void ContinueData(byte[] input, int size)
+    	{
 				if(size<toGet)
 				{
 					Array.Copy(input, 0, ReceivedData, index, size);
@@ -435,45 +566,68 @@ namespace DGPGrid
 					con.Send(cReceived);
 					exec.Close();
 					//file.Close();
-					state = ConnectionState.Idle;
+					con.status = Connection.ConnectionStatus.Idle;
 				}
-				
-			}
-    		#endregion
-    		
-    		#region AskedForExec
-			if (input[0] == cAskExec[0]  && state == ConnectionState.Idle)
-			{
-				int length = BitConverter.ToInt32(input, 1);
-				
-				if(size < (length + 1 + sizeof(int)))
-					return;
-				
-				try{
-					string jobID = Encoding.ASCII.GetString(input, sizeof(Int32)+1, length);
-					SendExec(jobID);
-				}
-				catch(Exception e)
+    	}
+    	
+    	public void ContinueRes(byte[] input, int size)
+    	{
+				if(size<toGet)
 				{
-					System.Diagnostics.Debug.WriteLine(e.ToString());
+					Array.Copy(input, 0, ReceivedData, index, size);
+       	 			//file.Write(input, 0, size);
+					toGet -= size;
+					index += size;
 				}
-			}
-    		#endregion
-    		
-			if (input[0] == cPing[0]  && state == ConnectionState.Idle)
-			{
-				Console.WriteLine("Ping");
-				con.Send(cReceived);
-			}
-			
-			if(state == ConnectionState.Ping)
-			{
-				if (input[0] == cReceived[0])
+				else
 				{
-					Console.WriteLine("Pong");
-					state = ConnectionState.Idle;
+					Array.Copy(input, 0, ReceivedData, index, toGet);
+       	 			//file.Write(input, 0, toGet);
+					index += toGet;
+					toGet -= toGet;
 				}
-			}
+				//Console.WriteLine("Len: {0}, Index: {1}, toGet: {2}", len, index, toGet);
+				if(toGet == 0)
+				{
+				
+					if(!Directory.Exists(Settings.workingDirectory + jobID + "\\result"))
+						Directory.CreateDirectory(Settings.workingDirectory + jobID + "\\result");
+					lock(DataBase.dataTrans)
+					{
+						System.Diagnostics.Debug.WriteLine("Removed", dataPath);
+						DataBase.dataTrans.Remove(dataPath);
+					}
+				
+					Stream exec = File.OpenWrite(Settings.workingDirectory + jobID + "\\" + dataPath);
+					
+	       	 		exec.Write(ReceivedData, 0, len);
+					
+					con.Send(cReceived);
+					exec.Close();
+					
+					string[] ress = dataPath.Split('\\');
+					string conID;
+					
+					lock(DataBase.dataTrans)
+					{
+						conID = DataBase.dataTrans["data\\" + ress[ress.Length - 1]];
+						DataBase.dataTrans.Remove("data\\" + ress[ress.Length - 1]);
+					}
+					
+					
+			    	Connection res = DataBase.cons.Find(
+			    		delegate(Connection connect)
+			    		{
+			    			return connect.ID == conID;
+			    		}
+			    	);
+					
+					if(res != null)
+						res.mp.dataReceived++;
+					
+					//file.Close();
+					con.status = Connection.ConnectionStatus.Idle;
+				}
     	}
     	
     	public void SendPeer()
@@ -597,6 +751,33 @@ namespace DGPGrid
         	con.Send(message);
     	}
     	
+    	public void AskRes(string jobID, string indataPath)
+    	{
+    		byte[] msg = cAskExec;
+    		if(String.IsNullOrEmpty(jobID))
+    			return;
+    		askedFor = jobID;
+						
+        	byte[] data = Encoding.ASCII.GetBytes(jobID);
+        	byte[] dataLen = BitConverter.GetBytes(Encoding.ASCII.GetBytes(jobID).Length);
+        	
+			byte[] dataPath = Encoding.ASCII.GetBytes(indataPath);
+        	byte[] dataPathLen = BitConverter.GetBytes(Encoding.ASCII.GetBytes(indataPath).Length);
+        	
+        	byte[] message = new byte[msg.Length + data.Length + dataLen.Length + dataPath.Length + dataPathLen.Length];
+        	int index = 0;
+        	Array.Copy(msg, 0, message, index, msg.Count());
+        	index += msg.Count();
+        	Array.Copy(dataLen, 0, message, index, dataLen.Count());
+        	index += dataLen.Count();
+        	Array.Copy(data, 0, message, index, jobID.Count());
+        	index += jobID.Count();
+        	Array.Copy(dataPathLen, 0, message, index, dataPathLen.Count());
+        	index += dataPathLen.Count();
+        	Array.Copy(dataPath, 0, message, index, dataPath.Count());
+        	con.Send(message);
+    	}
+    	
     	public void SendExec(string jobID)
     	{
     		byte[] msg = cSendExec;
@@ -655,18 +836,56 @@ namespace DGPGrid
         	dataFile.Close();
     	}
     	
+    	public void SendRes(string injobID, string indataPath)
+    	{
+			Console.WriteLine("Sent {0} = {1}", indataPath, con.ID);
+    		byte[] msg = cSendData;
+			Stream dataFile = File.OpenRead(Settings.workingDirectory + injobID + "\\" + indataPath);
+						
+			byte[] jobID = Encoding.ASCII.GetBytes(injobID);
+        	byte[] jobIDLen = BitConverter.GetBytes(Encoding.ASCII.GetBytes(injobID).Length);
+        	
+			byte[] dataPath = Encoding.ASCII.GetBytes(indataPath);
+        	byte[] dataPathLen = BitConverter.GetBytes(Encoding.ASCII.GetBytes(indataPath).Length);
+        	
+			byte[] data = new byte[dataFile.Length];
+			int dataFileLength = (int)dataFile.Length;
+        	byte[] dataLen = BitConverter.GetBytes(dataFileLength);
+			dataFile.Read(data, 0, data.Length);
+			
+        	byte[] message =
+        		new byte[msg.Length + jobID.Length + jobIDLen.Length + dataPath.Length + dataPathLen.Length
+        		         + dataLen.Length + data.Length];
+        	int index = 0;
+        	Array.Copy(msg, 0, message, index, msg.Count());
+        	index += msg.Count();
+        	Array.Copy(jobIDLen, 0, message, index, jobIDLen.Count());
+        	index += jobIDLen.Count();
+        	Array.Copy(jobID, 0, message, index, jobID.Count());
+        	index += jobID.Count();
+        	Array.Copy(dataPathLen, 0, message, index, dataPathLen.Count());
+        	index += dataPathLen.Count();
+        	Array.Copy(dataPath, 0, message, index, dataPath.Count());
+        	index += dataPath.Count();
+        	Array.Copy(dataLen, 0, message, index, dataLen.Count());
+        	index += dataLen.Count();
+        	Array.Copy(data, 0, message, index, data.Count());
+        	con.Send(message);
+        	dataFile.Close();
+    	}
+    	
     	public void MessageSending()
     	{
     		while(true)
     		{
-    			Thread.Sleep(1000);
-    			if (state == ConnectionState.Ping)
+    			Thread.Sleep(500);
+    			if (con.status == Connection.ConnectionStatus.Ping)
     			{
     				Console.WriteLine("Ping have not been answered");
     				con.Dispose();
     				continue;
     			}
-    			if (state == ConnectionState.Idle)
+    			if (con.status == Connection.ConnectionStatus.Idle)
     			{
     				if(peerChanged)
     				{
@@ -689,6 +908,20 @@ namespace DGPGrid
     				}
     				else
     				{
+    					/*if(dataWindow - dataSent + dataReceived < 5 )
+    					{
+	    					lock(DataBase.dataTrans)
+	    					{
+					    		foreach(KeyValuePair<string, string> KV in DataBase.dataTrans)
+					    		{
+					    			if(String.Compare(con.ID, KV.Value) == 0)
+					    			{
+					    				AskRes("1", KV.Key);
+					    			}
+					    		}
+	    					}
+    					}*/
+    					
     					if(dataSent - dataReceived > dataWindow)
     						continue;
 			    			//Console.WriteLine("New round");
@@ -713,7 +946,7 @@ namespace DGPGrid
 				    		}
     					}
 			    		//temp.Clear();
-						//state = ConnectionState.Ping;
+						//con.status = Connection.ConnectionStatus.Ping;
     					//con.Send(cPing);
     				}
     				continue;
@@ -724,6 +957,21 @@ namespace DGPGrid
     
     public class Connection
     {
+        public enum ConnectionStatus
+        {
+            Idle = 0,
+            Receiving,
+            ReceivingPeers,
+            ReceivingRoute,
+            ReceivingTasks,
+            ReceivingExec,
+            ReceivingData,
+            ReceivingRes,
+            Sending,
+            Ping
+        };
+        public volatile ConnectionStatus status;
+        
     	public Socket handle;
     	public StateObject state;
     	public string ID;
@@ -740,6 +988,7 @@ namespace DGPGrid
     		
             m_semaphore.WaitOne();
     		DataBase.AddConn(handle.RemoteEndPoint.ToString(), this);
+    		DataBase.cons.Add(this);
             m_semaphore.Release();
             mp = new MessageProcessor(this);
             Task.Factory.StartNew(() => mp.MessageSending());
@@ -763,6 +1012,16 @@ namespace DGPGrid
 				
 				if (bytesRead > 0)
 				{
+						
+					if(status == ConnectionStatus.ReceivingData)
+					{
+						mp.ContinueData(state.buffer, bytesRead);
+					}
+					else if(status == ConnectionStatus.ReceivingRes)
+					{
+						mp.ContinueRes(state.buffer, bytesRead);
+					}
+					else
 						mp.Parse(state.buffer, bytesRead);
 					handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(ReadCallback), state);
 				}
